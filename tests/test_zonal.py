@@ -4,13 +4,14 @@ import os
 import sys
 
 import numpy as np
+import geopandas as gpd
 import pytest
 import rasterio
 import simplejson
 from affine import Affine
 from shapely.geometry import Polygon
 
-from rasterstats import raster_stats, zonal_stats
+from rasterstats import raster_stats, zonal_stats, gen_zonal_stats #, gdf_zonal_stats
 from rasterstats.io import read_featurecollection, read_features
 from rasterstats.utils import VALID_STATS
 
@@ -574,6 +575,52 @@ def test_geodataframe_zonal():
 
     expected = zonal_stats(polygons, raster)
     assert zonal_stats(df, raster) == expected
+
+
+#%% # add a unit test for the function gdf_zonal_stats
+
+def gdf_zonal_stats(vectors, *args, **kwargs):
+    """The primary zonal statistics entry point.
+    All arguments are passed directly to ``gen_zonal_stats``.
+    See its docstring for details.
+    
+    The difference is that ``gdf_zonal_stats`` will
+    return a GeoDataFrame rather than a generator.
+    Besides this, we make sure the new gdf as the right
+    metadata by conserving the CRS
+    """
+
+    gdf = gpd.GeoDataFrame.from_features(
+        gen_zonal_stats(vectors, geojson_out=True, *args, **kwargs)
+        )
+    
+    # if the input is a file path : open has gdf and get crs
+    if isinstance(vectors, str): 
+        gdf.crs = gpd.read_file(vectors).crs
+
+    # if the vectors has a 'crs' attribute use it to keep the crs
+    elif hasattr(vectors, "crs"):
+        gdf.crs = vectors.crs
+        
+    # otherwise, we cannot store the crs ? (not sure if that is possible)
+    else:
+        gdf.crs = None
+        print("Warning : the crs is not stored in the output GeoDataFrame")
+
+    return gdf
+
+
+def test_gdf_zonal_stats():
+    gpd = pytest.importorskip("geopandas")
+    polygons = os.path.join(DATA, "polygons.shp")
+    gdf = gpd.read_file(polygons)
+    if not hasattr(gdf, "__geo_interface__"):
+        pytest.skip("This version of geopandas doesn't support df.__geo_interface__")
+
+    expected_with_path = gdf_zonal_stats(polygons, raster)
+    expected_with_gdf = gdf_zonal_stats(gdf, raster)
+    assert expected_with_gdf.equals(expected_with_path) # Use equals() to compare DataFrames
+    assert expected_with_gdf.crs == gdf.crs             # Check that the crs is conserved
 
 
 # TODO #  gen_zonal_stats(<features_without_props>)

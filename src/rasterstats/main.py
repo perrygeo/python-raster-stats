@@ -3,6 +3,7 @@ import sys
 import warnings
 
 import numpy as np
+import geopandas as gpd
 from affine import Affine
 from shapely.geometry import shape
 
@@ -50,6 +51,36 @@ def zonal_stats(*args, **kwargs):
         return [stat for stat in tqdm(stats, total=total)]
     else:
         return list(gen_zonal_stats(*args, **kwargs))
+
+def gdf_zonal_stats(vectors, *args, **kwargs):
+    """The primary zonal statistics entry point.
+    All arguments are passed directly to ``gen_zonal_stats``.
+    See its docstring for details.
+    
+    The difference is that ``gdf_zonal_stats`` will
+    return a GeoDataFrame rather than a generator.
+    Besides this, we make sure the new gdf as the right
+    metadata by conserving the CRS
+    """
+
+    gdf = gpd.GeoDataFrame.from_features(
+        gen_zonal_stats(vectors, geojson_out=True, *args, **kwargs)
+        )
+    
+    # if the input is a file path : open has gdf and get crs
+    if isinstance(vectors, str): 
+        gdf.crs = gpd.read_file(vectors).crs
+
+    # if the vectors has a 'crs' attribute use it to keep the crs
+    elif hasattr(vectors, "crs"):
+        gdf.crs = vectors.crs
+        
+    # otherwise, we cannot store the crs ? (not sure if that is possible)
+    else:
+        gdf.crs = None
+        print("Warning : the crs is not stored in the output GeoDataFrame")
+
+    return gdf
 
 
 def gen_zonal_stats(
