@@ -46,7 +46,7 @@ def zonal_stats(*args, **kwargs):
                 "You specified progress=True, but tqdm is not installed in the environment. You can do pip install rasterstats[progress] to install tqdm!"
             )
         stats = gen_zonal_stats(*args, **kwargs)
-        total = sum(1 for _ in stats)
+        total = len(args[0])
         return [stat for stat in tqdm(stats, total=total)]
     else:
         return list(gen_zonal_stats(*args, **kwargs))
